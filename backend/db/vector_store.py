@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import re
+import threading
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
@@ -33,6 +34,7 @@ class EmbeddingService:
         )
         self._model = None
         self._using_fallback = False
+        self._load_lock = threading.Lock()
 
     @property
     def backend_mode(self) -> str:
@@ -42,23 +44,39 @@ class EmbeddingService:
     def _load_model(self) -> None:
         if self._model is not None or self._using_fallback:
             return
-        if self.offline_fallback:
-            logger.info("Using deterministic offline embedding fallback (configured).")
-            self._using_fallback = True
-            return
+        with self._load_lock:
+            if self._model is not None or self._using_fallback:
+                return
+            if self.offline_fallback:
+                logger.info("Using deterministic offline embedding fallback (configured).")
+                self._using_fallback = True
+                return
 
-        try:
-            from sentence_transformers import SentenceTransformer
+            try:
+                from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer(self.model_name, local_files_only=False)
-            logger.info("Loaded SentenceTransformer PyTorch model: %s", self.model_name)
-        except Exception as exc:
-            logger.warning(
-                "SentenceTransformer model '%s' unavailable (%s); falling back to deterministic hash embeddings.",
-                self.model_name,
-                exc,
-            )
-            self._using_fallback = True
+                try:
+                    self._model = SentenceTransformer(
+                        self.model_name,
+                        device="cpu",
+                        local_files_only=True,
+                        model_kwargs={"low_cpu_mem_usage": False},
+                    )
+                except Exception:
+                    self._model = SentenceTransformer(
+                        self.model_name,
+                        device="cpu",
+                        local_files_only=False,
+                        model_kwargs={"low_cpu_mem_usage": False},
+                    )
+                logger.info("Loaded SentenceTransformer PyTorch model: %s", self.model_name)
+            except Exception as exc:
+                logger.warning(
+                    "SentenceTransformer model '%s' unavailable (%s); falling back to deterministic hash embeddings.",
+                    self.model_name,
+                    exc,
+                )
+                self._using_fallback = True
 
     @staticmethod
     def _fallback_embed(text: str, dim: int = 384) -> List[float]:

@@ -1,3 +1,13 @@
+---
+title: Personal AI JobPilot
+emoji: 🧭
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Personal AI JobPilot — Autonomous Job Discovery Platform
 
 Personal AI JobPilot is a production-oriented, privacy-first personal job discovery and matching platform. Upload your resume once (PDF or DOCX), and the platform autonomously discovers new **Data Analyst, Data Scientist, AI/ML, and Internship** opportunities every day (prioritizing fresh graduate and entry-level roles), computes explainable semantic + skill-gap match scores, and presents verified official company application links.
@@ -67,7 +77,17 @@ pytest -v
 
 ## Publishing & Cloud Deployment
 
-### Option A: GitHub + Render (1-Click Blueprint)
+### Option A: Hugging Face Spaces (Recommended · Free 16 GB RAM Docker Space)
+This repository includes a single-container [`Dockerfile`](Dockerfile) and Space metadata (`sdk: docker`, `app_port: 7860`) running full PyTorch `all-MiniLM-L6-v2` + FastAPI + Streamlit together:
+1. Create a new **Docker** Space at [huggingface.co/new-space](https://huggingface.co/new-space) (Space hardware: **CPU Basic · Free · 16 GB RAM**).
+2. Add your secrets under **Space → Settings → Variables and secrets**: `RESUME_ENCRYPTION_KEY`, `LLM_API_KEY` (Gemini), `LLM_FALLBACK_API_KEY` (OpenAI), and optional PostgreSQL `DATABASE_URL`.
+3. Push `main` directly to your Space Git remote:
+   ```bash
+   git remote add space https://huggingface.co/spaces/<YOUR_HF_USERNAME>/personal-ai-jobpilot
+   git push space main
+   ```
+
+### Option B: GitHub + Render (1-Click Blueprint)
 1. Push this repository to GitHub (`.gitignore` already excludes `.env`, `data/`, `*.db`, and `.venv/`):
    ```bash
    git init
