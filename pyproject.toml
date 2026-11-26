@@ -1,0 +1,13 @@
+[project]
+name = "personal-ai-jobpilot"
+version = "1.0.0"
+description = "Autonomous AI-powered personal job discovery, matching, and career assistant platform"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
