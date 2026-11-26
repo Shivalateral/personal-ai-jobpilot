@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -m -u 1000 user
 WORKDIR /home/user/app
 
-COPY --chown=user:user requirements.txt .
-RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+COPY --chown=user:user requirements-full.txt .
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-full.txt
 
 COPY --chown=user:user backend ./backend
 COPY --chown=user:user frontend ./frontend

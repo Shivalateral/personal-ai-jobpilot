@@ -120,8 +120,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _render_memory_guard(self):
-        # On Render Free/Starter 512MB RAM, default to lightweight hash embeddings unless explicitly overridden
-        if os.getenv("RENDER") and "EMBEDDING_OFFLINE_FALLBACK" not in os.environ:
+        # On constrained free cloud tiers (Render / Streamlit Cloud), default to lightweight hash embeddings unless overridden
+        is_streamlit_cloud = str(BASE_DIR).startswith("/mount/src") or bool(os.getenv("STREAMLIT_SHARING_MODE"))
+        if (os.getenv("RENDER") or is_streamlit_cloud) and "EMBEDDING_OFFLINE_FALLBACK" not in os.environ:
             self.embedding_offline_fallback = True
         return self
 
