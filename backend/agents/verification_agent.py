@@ -1,6 +1,7 @@
 """Job Verification Agent: validates links, detects expired postings, deduplicates, and batch-indexes jobs."""
 
 from concurrent.futures import ThreadPoolExecutor
+import gc
 import logging
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
@@ -157,23 +158,27 @@ class JobVerificationAgent:
 
         if persisted:
             db.flush()
-            batch_items = [
-                (
-                    job.id,
-                    build_job_profile_text(job),
-                    {
-                        "job_id": job.id,
-                        "company": job.company,
-                        "title": job.title,
-                        "role_category": job.role_category,
-                        "seniority_level": job.seniority_level,
-                        "work_mode": job.work_mode,
-                        "source": job.source,
-                    },
-                )
-                for job in persisted
-            ]
-            self.vector_store.upsert_jobs_batch(batch_items)
+            batch_size = 250
+            for start in range(0, len(persisted), batch_size):
+                chunk = persisted[start : start + batch_size]
+                batch_items = [
+                    (
+                        job.id,
+                        build_job_profile_text(job),
+                        {
+                            "job_id": job.id,
+                            "company": job.company,
+                            "title": job.title,
+                            "role_category": job.role_category,
+                            "seniority_level": job.seniority_level,
+                            "work_mode": job.work_mode,
+                            "source": job.source,
+                        },
+                    )
+                    for job in chunk
+                ]
+                self.vector_store.upsert_jobs_batch(batch_items)
+                gc.collect()
 
         db.commit()
         logger.info(

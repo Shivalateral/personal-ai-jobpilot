@@ -4,6 +4,7 @@ import hashlib
 import html
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -491,7 +492,7 @@ def _finalize_raw_job(
         company=company.strip() or "Unknown Company",
         title=title.strip(),
         location=location.strip() or "Unspecified",
-        description=clean_desc[:15000],
+        description=clean_desc[:6000],
         apply_url=apply_url.strip(),
         source_url=source_url,
         company_logo_url=logo,
@@ -947,10 +948,11 @@ class DiscoverySourcesClient:
                 lambda r, comp=company: parse_ashby_payload(comp, r.json()),
             ))
 
+        is_render = bool(os.getenv("RENDER"))
         for company in self.settings.smartrecruiters_company_list:
             for sr_country in ("in", "ca", "global"):
                 q_suffix = f"&country={sr_country}" if sr_country != "global" else ""
-                offsets = (0, 100) if (sr_country == "in" or company == "BoschGroup") else (0,)
+                offsets = (0,) if is_render else ((0, 100) if (sr_country == "in" or company == "BoschGroup") else (0,))
                 for offset in offsets:
                     tasks.append((
                         f"smartrecruiters:{company}:{sr_country}:{offset}",
@@ -1038,7 +1040,8 @@ class DiscoverySourcesClient:
                 logger.info("Source '%s' returned status %s", label, resp.status_code)
                 return []
 
-        with ThreadPoolExecutor(max_workers=10) as pool:
+        pool_workers = 4 if is_render else 10
+        with ThreadPoolExecutor(max_workers=pool_workers) as pool:
             futures = {pool.submit(_worker, lbl, u, fn): lbl for lbl, u, fn in tasks}
             for fut in as_completed(futures):
                 lbl = futures[fut]

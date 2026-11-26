@@ -1,10 +1,11 @@
 """Application configuration management using Pydantic Settings."""
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -116,6 +117,13 @@ class Settings(BaseSettings):
         if isinstance(value, str) and value.startswith("postgres://"):
             return value.replace("postgres://", "postgresql+psycopg2://", 1)
         return value
+
+    @model_validator(mode="after")
+    def _render_memory_guard(self):
+        # On Render Free/Starter 512MB RAM, default to lightweight hash embeddings unless explicitly overridden
+        if os.getenv("RENDER") and "EMBEDDING_OFFLINE_FALLBACK" not in os.environ:
+            self.embedding_offline_fallback = True
+        return self
 
     def parse_csv_list(self, raw: str) -> List[str]:
         """Split a comma-separated config string into clean non-empty tokens."""

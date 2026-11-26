@@ -1,7 +1,9 @@
 """Next-Generation SaaS Dashboard for Personal AI JobPilot (16-Page Collapsible Navigation)."""
 
 import os
+import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -10,6 +12,7 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parents[1])
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+import httpx
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -67,9 +70,48 @@ NAV_GROUPS = {
 
 
 @st.cache_resource
+def _ensure_local_backend(base_url: str) -> bool:
+    """For single-container / Render Python deployments, auto-start embedded FastAPI on 127.0.0.1:8000 if not running."""
+    norm = (base_url or "").strip().rstrip("/")
+    if not any(h in norm for h in ("127.0.0.1:8000", "localhost:8000")):
+        return True
+    try:
+        r = httpx.get(f"{norm}/health", timeout=2.0, trust_env=False)
+        if r.status_code == 200:
+            return True
+    except Exception:
+        pass
+
+    backend_entry = Path(_PROJECT_ROOT) / "backend" / "main.py"
+    if not backend_entry.exists():
+        return False
+
+    env = os.environ.copy()
+    if env.get("RENDER") and "EMBEDDING_OFFLINE_FALLBACK" not in env:
+        env["EMBEDDING_OFFLINE_FALLBACK"] = "true"
+    subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "8000"],
+        cwd=_PROJECT_ROOT,
+        env=env,
+    )
+    deadline = time.monotonic() + 25.0
+    while time.monotonic() < deadline:
+        try:
+            r = httpx.get(f"{norm}/health", timeout=2.0, trust_env=False)
+            if r.status_code == 200:
+                return True
+        except Exception:
+            pass
+        time.sleep(0.5)
+    return False
+
+
+@st.cache_resource
 def get_client(session_id: str = "ephemeral-default", username: str = "default") -> JobPilotAPIClient:
+    base_url = os.getenv("FRONTEND_API_URL", "http://127.0.0.1:8000")
+    _ensure_local_backend(base_url)
     return JobPilotAPIClient(
-        base_url=os.getenv("FRONTEND_API_URL", "http://127.0.0.1:8000"),
+        base_url=base_url,
         auth_token=os.getenv("API_AUTH_TOKEN", ""),
         session_id=session_id,
         username=username,
@@ -351,6 +393,13 @@ def main() -> None:
     filter_opts = overview.get("filter_options") or {}
     kpis = overview.get("kpis") or {}
     charts = overview.get("charts") or {}
+
+    if kpis.get("total_jobs", 0) == 0:
+        b_col1, b_col2 = st.columns([4, 1.3])
+        b_col1.info("⏳ Initial autonomous discovery is pulling verified MNC, startup, India, Canada & remote career portals in the background (~20-40s on fresh cloud boot)...")
+        if b_col2.button("🔄 Refresh Feed", width="stretch", key="btn_bootstrap_refresh"):
+            bump_data_version()
+            st.rerun()
 
     if not active_resume and selected_page not in ("Resume Analyzer", "Account and Security"):
         with st.expander("📄 Upload Your Resume to Unlock Personalized Match Predictions (Session-Only by Default)", expanded=True):
